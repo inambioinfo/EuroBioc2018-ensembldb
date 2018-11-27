@@ -1,0 +1,10 @@
+# setup file with some org settings.
+#+OPTIONS: ^:{} toc:4 H:4 num:4 author:t email:t
+#+PROPERTY: header-args :exports both
+#+PROPERTY: header-args :noweb yes
+#+PROPERTY: header-args :results output verbatim
+#+PROPERTY: header-args :tangle yes
+#+PROPERTY: header-args:R :session *R_EuroBioc2018*
+
+#+STARTUP: overview
+#+STARTUP: indent
