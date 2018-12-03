@@ -1,16 +1,16 @@
-#+AUTHOR: Johannes Rainer (twitter/github: jotsetung)
-#+EMAIL: johannes.rainer@eurac.edu
-#+DATE: December 7, 2018
 #+SETUPFILE: orgsetup.org
 
 * =ensembldb=: coordinate mapping between the genome, exome, transcriptome and proteome
 
-*EuroBioc2018*, December 2017, Munich.
+*EuroBioc2018*, December 2018, Munich
+
+Johannes Rainer (Eurac Research, Italy)
+johannes.rainer@eurac.edu
+github/twitter: /jotsetung/
 
 ** =ensembldb= and =EnsDb= databases
 
 - =ensembldb=: create and use of Ensembl-based annotation resources.
-- Data stored in =EnsDb= sqlite files/databases.
 - Genomic *and* protein annotation available.
 - Powerful filter framework.
 - *Update*: functions to map between coordinate systems:
@@ -23,118 +23,107 @@
     
 ** Example: map genomic coordinates to protein coordinates
 
-- Variant at positon 16:89920138 related to human red hair color.
-- Task: find the amino acid that is affected by this variant.
+- Variant at position 16:89920138 related to human red hair color.
+- _Task_: find the amino acid that is affected by this variant.
+  #+BEGIN_SRC R
+    library(ensembldb)
+    library(EnsDb.Hsapiens.v86)
+    library(magrittr)
 
-#+BEGIN_SRC R
-  library(ensembldb)
-  library(EnsDb.Hsapiens.v86)
-  library(magrittr)
-  edb <- EnsDb.Hsapiens.v86
-  ## Change chromosome naming style to UCSC
-  seqlevelsStyle(edb) <- "UCSC"
+    ## Change chromosome naming style to UCSC
+    seqlevelsStyle(EnsDb.Hsapiens.v86) <- "UCSC"
 
-  gnm_pos <- GRanges("chr16", IRanges(89920138, width = 1))
-  prt_pos <- genomeToProtein(gnm_pos, edb)
-  prt_pos
+    ## Map genomic to protein coordinates
+    prt_pos <- GRanges("chr16", IRanges(89920138, width = 1)) %>%
+        genomeToProtein(EnsDb.Hsapiens.v86)
+    prt_pos
 
-  ## Get the amino acid sequences for the proteins
-  prt_seq <- edb %>%
-      filter(~ protein_id == names(prt_pos[[1]])) %>%
-      proteins(return.type = "AAStringSet")
-  prt_seq
+    ## Get the amino acid sequences for the proteins
+    prt_seq <- EnsDb.Hsapiens.v86 %>%
+        filter(~ protein_id == names(prt_pos[[1]])) %>%
+        proteins(return.type = "AAStringSet")
+    prt_seq
 
-  ## Get the amino acid at position 294
-  subseq(prt_seq, start = start(prt_pos)[[1]], width = 1)
-#+END_SRC
+    ## Get the amino acid at position 294
+    library(Biostrings)
+    subseq(prt_seq, start = start(prt_pos)[[1]], width = 1)
 
-- Amino acid of the codon affected by the variant is an /aspartic acid/ (="D"=).
+    ## Answer: affected amino acid: aspartic acid
+  #+END_SRC
 
 ** Example: map protein-relative coordinates to the genome
 
-- Down syndrome characterized by a third copy of chromosome 21.
-- Phenotype caused most likely by gene-dosage effect.
+- Background
+  - Down syndrome characterized by a third copy of chromosome 21.
+  - Phenotype caused most likely by gene-dosage effect.
+  - _Task_: find genes with a specific protein domain, plot transcript(s)
+    highlighting the exons encoding the protein domains.
 
-*** Search transcription factors with specific domain
+- Search proteins with /helix-loop-helix/ domain on chromosome 21.
+  #+BEGIN_SRC R
+    ## Get genes on chromosome 21 encoding a HLH domain
+    gns <- EnsDb.Hsapiens.v86 %>%
+        filter(~ seq_name == "chr21" & protein_domain_id == "PF00010") %>%
+        genes()
+    gns
 
-- Search transcription factors with /helix-loop-helix/ domain encoded on
-  chromosome 21.
-#+BEGIN_SRC R
-  gns <- edb %>%
-      filter(~ seq_name == "chr21" & protein_domain_id == "PF00010") %>%
-      genes()
-  gns
-
-  ## Get transcript models for SIM2
-  txs <- edb %>%
-      filter(~ genename == "SIM2" &
-                 protein_domain_id == "PF00010") %>%
-      getGeneRegionTrackForGviz
-
-#+END_SRC
-
-*** Plot transcript models
-
-- Plot the transcript models for /SIM2/.
-#+BEGIN_SRC R
-  library(Gviz)
-  ## Define the individual tracks:
-  ## - Ideagram
-  ideo_trk <- IdeogramTrack(genome = "hg38", chromosome = "chr21")
-  ## - Genome axis
-  gaxis_trk <- GenomeAxisTrack()
-  ## - Transcripts
-  gene_trk <- GeneRegionTrack(txs, showId = TRUE, just.group = "right",
-                              name = "", geneSymbol = TRUE, size = 0.5)
-  ## Plot the data
-  plotTracks(list(ideo_trk, gaxis_trk, gene_trk))
-#+END_SRC
-
-*** Fetch protein domains encoded in these transcripts
+    ## Get transcript models for SIM2 encoding PF00010
+    txs <- EnsDb.Hsapiens.v86 %>%
+        filter(~ gene_name == "SIM2" &
+                   protein_domain_id == "PF00010") %>%
+        getGeneRegionTrackForGviz
+    txs
+  #+END_SRC
 
 - Fetch all Pfam protein domains for the /SIM2/ transcript.
-#+BEGIN_SRC R
-  ## Fetch all Pfam protein domains for the transcript(s)
-  pdoms <- edb %>%
-      filter(~ tx_id %in% txs$transcript &
-                    protein_domain_source == "pfam") %>%
-      proteins(columns = c("protein_domain_id", "prot_dom_start",
-                           "prot_dom_end"))
-  pdoms
-#+END_SRC
-
-*** Map protein-relative coordinates to the genome
+  #+BEGIN_SRC R
+    ## Fetch all Pfam protein domains for the transcript(s)
+    pdoms <- EnsDb.Hsapiens.v86 %>%
+        filter(~ tx_id %in% txs$transcript &
+                      protein_domain_source == "pfam") %>%
+        proteins(columns = c("protein_domain_id", "prot_dom_start",
+                             "prot_dom_end"))
+    pdoms
+  #+END_SRC
 
 - Map protein domain coordinates to the genome.
-#+BEGIN_SRC R
-  pdoms_rng <- IRanges(start = pdoms$prot_dom_start,
-                       end = pdoms$prot_dom_end,
-                       names = pdoms$protein_id)
+  #+BEGIN_SRC R
+    pdoms_rng <- IRanges(start = pdoms$prot_dom_start,
+                         end = pdoms$prot_dom_end,
+                         names = pdoms$protein_id)
 
-  pdoms_gnm <- proteinToGenome(pdoms_rng, edb)
-  pdoms_gnm
-#+END_SRC
-
-*** Plot transcript models along with encoded protein domains
+    ## Map protein domains to genomic coordinates
+    pdoms_gnm <- proteinToGenome(pdoms_rng, EnsDb.Hsapiens.v86)
+    pdoms_gnm
+  #+END_SRC
 
 - Plot transcript models and encoded protein domains.
-#+BEGIN_SRC R
-  ## Convert the list to a GRanges with grouping information
-  pdoms_grng <- unlist(GRangesList(pdoms_gnm))
-  pdoms_grng$id <- rep(pdoms$protein_domain_id, lengths(pdoms_gnm))
-  pdoms_grng$grp <- rep(1:nrow(pdoms), lengths(pdoms_gnm))
-  pdoms_grng
+  #+BEGIN_SRC R
+    ## Convert the list to a GRanges with grouping information
+    pdoms_grng <- unlist(GRangesList(pdoms_gnm))
+    pdoms_grng$id <- rep(pdoms$protein_domain_id, lengths(pdoms_gnm))
+    pdoms_grng$grp <- rep(1:nrow(pdoms), lengths(pdoms_gnm))
+    pdoms_grng
 
-  ## - Protein domain track
-  pdom_trk <- AnnotationTrack(pdoms_grng, group = pdoms_grng$grp,
-                              id = pdoms_grng$id, groupAnnotation = "id",
-                              just.group = "right", shape = "box",
-                              name = "Protein domains", size = 0.5)
 
-  ## Generate the plot
-  plotTracks(list(ideo_trk, gaxis_trk, gene_trk, pdom_trk))
-#+END_SRC
 
+    library(Gviz)
+    ## Define the individual tracks:
+    ## - Ideogram
+    ideo_trk <- IdeogramTrack(genome = "hg38", chromosome = "chr21")
+    ## - Genome axis
+    gaxis_trk <- GenomeAxisTrack()
+    ## - Transcripts
+    gene_trk <- GeneRegionTrack(txs, showId = TRUE, just.group = "right",
+                                name = "", geneSymbol = TRUE, size = 0.5)
+    ## - Protein domain track
+    pdom_trk <- AnnotationTrack(pdoms_grng, group = pdoms_grng$grp,
+                                id = pdoms_grng$id, groupAnnotation = "id",
+                                just.group = "right", shape = "box",
+                                name = "Protein domains", size = 0.5)
+
+    plotTracks(list(ideo_trk, gaxis_trk, gene_trk, pdom_trk))
+  #+END_SRC
 
 ** Finally
 
