@@ -6,3 +6,4 @@ Files:
 - [EuroBioc2018-ensembldb.org](EuroBioc2018-ensembldb.org): org-mode file
   for the interactive presentation.
   
+Link to the *ioslides*-based presentation: [https://jotsetung.github.io/EuroBioc2018-ensembldb/EuroBioc2018-ensembldb-ioslides.html](EuroBioc2018-ensembldb).
