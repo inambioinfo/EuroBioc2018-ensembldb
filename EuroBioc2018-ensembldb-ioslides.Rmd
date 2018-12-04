@@ -1,0 +1,278 @@
+---
+title: "`ensembldb`: coordinate mapping between the genome, exome, transcriptome and proteome"
+author: "Johannes Rainer<br><strong>Eurac Research</strong>, Bolzano, Italy<br>johannes.rainer@eurac.edu - github/twitter: jotsetung"
+date: "December 2018"
+output: 
+  ioslides_presentation:
+    widescreen: true
+    fig_width: 7
+    fig_height: 5
+    fig_retina: 2
+    fig_caption: false
+    transition: faster
+    css: jostyle.css
+---
+
+<style type="text/css">
+
+slides > slide:not(.nobackground):after {
+  content: '';
+}
+
+slides > slide {
+    -webkit-transition:none !important;transition:none !important;
+}
+
+.build > * {
+  -webkit-transition: opacity 0.1s ease-in-out;
+  -webkit-transition-delay: 0.1s;
+  -moz-transition: opacity 0.1s ease-in-out 0.1s;
+  -o-transition: opacity 0.1s ease-in-out 0.1s;
+  transition: opacity 0.1s ease-in-out 0.1s;
+}
+
+</style>
+
+<!-- 
+For options, settings etc see:
+https://rmarkdown.rstudio.com/ioslides_presentation_format.html
+https://bookdown.org/yihui/rmarkdown/ioslides-presentation.html#adding-a-logo
+
+    css: style.css
+
+
+f fullscreen
+command + increase size (zoom)
+w toggle widescreen
+o enable overview
+h enable code highlight
+
+
+Export to pdf:
+webshot function from webshot package.
+Might have to change stuff in the style sheet to make it working.
+library(webshot)
+install_phantomjs()
+fn <- paste0("file://", normalizePath("xcms-preprocessing-ioslides.html"))
+webshot(fn, "xcms-preprocessing-ioslides.pdf", delay = 4, vwidth = 1024, vheight = 768)
+-->
+
+## `ensembldb` and `EnsDb` databases {.build}
+
+- `ensembldb`: create and use Ensembl-based annotation resources.
+- Genomic **and** protein annotations available.
+- Powerful filter framework.
+
+<div>
+- **Update**: functions to map between coordinate systems:
+  - `genomeToTranscript`
+  - `transcriptToGenome`
+  - `transcriptToProtein`
+  - `proteinToTranscript`
+  - `proteinToGenome`
+  - `genomeToProtein`
+</div>
+
+## Example: map genomic to protein coordinates {.build}
+
+- Variant at position 16:89920138 related to human red hair color.
+- **Task**: find the amino acid that is affected by this variant.
+
+<div>
+```{r load-libs, message = FALSE}
+## Load required libraries
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+library(magrittr)
+
+## Change chromosome naming style to UCSC
+seqlevelsStyle(EnsDb.Hsapiens.v86) <- "UCSC"
+```
+</div>
+
+## | ... map the genomic position to protein coordinates ... {.build}
+
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+prt_pos <- GRanges("chr16", IRanges(89920138, width = 1)) %>%
+    genomeToProtein(EnsDb.Hsapiens.v86)
+prt_pos[[1]]
+```
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+## Map genomic position to protein coordinates
+prt_pos <- GRanges("chr16", IRanges(89920138, width = 1)) %>%
+    genomeToProtein(EnsDb.Hsapiens.v86)
+prt_pos[[1]]
+```
+</div>
+
+## | ... get amino acid sequences for the proteins ... {.build}
+
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+prt_seq <- EnsDb.Hsapiens.v86 %>%
+    filter(~ protein_id == names(prt_pos[[1]])) %>%
+    proteins(return.type = "AAStringSet")
+prt_seq
+```
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+## Get amino acid sequences for the proteins
+prt_seq <- EnsDb.Hsapiens.v86 %>%
+    filter(~ protein_id == names(prt_pos[[1]])) %>%
+    proteins(return.type = "AAStringSet")
+prt_seq
+```
+</div>
+
+## | ... get the affected amino acid. {.build}
+
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+library(Biostrings)
+subseq(prt_seq, start = start(prt_pos[[1]]), width = 1)
+```
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+## Get the amino acid at position 294
+library(Biostrings)
+subseq(prt_seq, start = start(prt_pos[[1]]), width = 1)
+```
+</div>
+<div>
+- **Answer** the affected amino acid is an aspartic acid.
+</div>
+
+## Example: map protein-relative positions to the genome {.build}
+
+- Down syndrome characterized by a third copy of chromosome 21.
+- Phenotype most likely caused by gene-dosage effect.
+
+<div>
+- **Task**:
+  - find genes with a specific protein domain on chromosome 21
+  - plot transcript(s) with encoded protein domains on genomic scale.
+</div>
+
+## | ... search proteins with *helix-loop-helix* domain on chr21 ... {.build}
+
+<div>
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+gns <- EnsDb.Hsapiens.v86 %>%
+    filter(~ seq_name == "chr21" & protein_domain_id == "PF00010") %>%
+    genes()
+gns
+```
+</div>
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+gns <- EnsDb.Hsapiens.v86 %>%
+    filter(~ seq_name == "chr21" & protein_domain_id == "PF00010") %>%
+    genes()
+gns
+```
+</div>
+
+## | ... extract transcript models for SIM2 ... {.build}
+
+<div>
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+txs <- EnsDb.Hsapiens.v86 %>%
+    filter(~ gene_name == "SIM2" &
+               protein_domain_id == "PF00010") %>%
+    getGeneRegionTrackForGviz
+txs
+```
+</div>
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+txs <- EnsDb.Hsapiens.v86 %>%
+    filter(~ gene_name == "SIM2" &
+               protein_domain_id == "PF00010") %>%
+    getGeneRegionTrackForGviz
+txs
+```
+</div>
+
+
+## | ... fetch Pfam protein domains for SIM2 transcript ... {.build}
+
+<div>
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+pdoms <- EnsDb.Hsapiens.v86 %>%
+    filter(~ tx_id %in% txs$transcript &
+               protein_domain_source == "pfam") %>%
+    proteins(columns = c("protein_domain_id", "prot_dom_start",
+                         "prot_dom_end"))
+pdoms
+```
+</div>
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+pdoms <- EnsDb.Hsapiens.v86 %>%
+    filter(~ tx_id %in% txs$transcript &
+               protein_domain_source == "pfam") %>%
+    proteins(columns = c("protein_domain_id", "prot_dom_start",
+                         "prot_dom_end"))
+pdoms
+```
+</div>
+
+## | ... map protein domain coordinates to the genome ... {.build}
+
+<div>
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+pdoms_rng <- IRanges(start = pdoms$prot_dom_start,
+                     end = pdoms$prot_dom_end,
+                     names = pdoms$protein_id)
+
+pdoms_gnm <- proteinToGenome(pdoms_rng, EnsDb.Hsapiens.v86)
+pdoms_gnm
+```
+</div>
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+pdoms_gnm
+```
+</div>
+
+## | ... plot transcript models with encoded protein domains. {.build}
+
+<div>
+```{r, message = FALSE, warning = FALSE, results = "hide"}
+## Convert the list to a GRanges with grouping information
+pdoms_grng <- unlist(GRangesList(pdoms_gnm))
+pdoms_grng$id <- rep(pdoms$protein_domain_id, lengths(pdoms_gnm))
+pdoms_grng$grp <- rep(1:nrow(pdoms), lengths(pdoms_gnm))
+pdoms_grng
+
+library(Gviz)
+## Define tracks
+ideo_trk <- IdeogramTrack(genome = "hg38", chromosome = "chr21")
+gaxis_trk <- GenomeAxisTrack()
+gene_trk <- GeneRegionTrack(txs, showId = TRUE, just.group = "right",
+                            name = "", geneSymbol = TRUE, size = 0.5)
+pdom_trk <- AnnotationTrack(pdoms_grng, group = pdoms_grng$grp,
+                            id = pdoms_grng$id, groupAnnotation = "id",
+                            just.group = "right", shape = "box",
+                            name = "Protein domains", size = 0.5)
+
+plotTracks(list(ideo_trk, gaxis_trk, gene_trk, pdom_trk))
+```
+</div>
+
+## | ... plot transcript models with encoded protein domains.
+
+<div>
+```{r, message = FALSE, warning = FALSE, echo = FALSE, fig.width = 7, fig.height = 5}
+plotTracks(list(ideo_trk, gaxis_trk, gene_trk, pdom_trk))
+```
+</div>
+
+
+## Finally ... {.build}
+
+<div>
+- **Thank you for your attention!**
+</div>
+<div>
+- Problems? Questions? -> https://github.com/jotsetung/ensembldb
+</div>
